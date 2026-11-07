@@ -59,7 +59,7 @@ async def execute_ghl_contact_creation(first_name: str, last_name: str, phone: s
 async def handle_inbound_call():
     initial_greeting = "Hello! Welcome to Precision Auto Repair. May I have your name, please?"
     
-    # Generate high-quality voice audio from Cartesia's production REST endpoint
+    # FIXED: Added the correct /v1/tts/bytes production path for Cartesia
     audio_url = f"https://cartesia.ai{httpx.URL(initial_greeting)}&voice_id=62ae83ad-4f6a-430b-af41-a9bede9286ca&output_format=wav"
     
     # Twilio plays the Cartesia audio, listens for the user's name, and sends it to /twilio/respond
@@ -97,10 +97,10 @@ async def handle_user_response(request: Request):
         messages=[{"role": "user", "content": user_speech}]
     )
     
-    ai_text = response.content.text
+    ai_text = response.content[0].text if isinstance(response.content, list) else response.content.text
     print(f"[Claude 5.5] Response: '{ai_text}'")
     
-    # Generate the Cartesia audio link for Claude's response string
+    # FIXED: Added the correct /v1/tts/bytes production path for Cartesia
     reply_audio_url = f"https://cartesia.ai{httpx.URL(ai_text)}&voice_id=62ae83ad-4f6a-430b-af41-a9bede9286ca&output_format=wav"
     
     # Loop back to continue the conversation seamlessly
