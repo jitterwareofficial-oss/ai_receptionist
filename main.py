@@ -7,7 +7,11 @@ from fastapi import FastAPI, WebSocket, Response
 from anthropic import AsyncAnthropic
 from cartesia import Cartesia
 from deepgram import AsyncDeepgramClient
-from deepgram.models import LiveOptions, LiveEvents
+from deepgram import (
+    DeepgramClient,
+    LiveOptions,
+    LiveEvents
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,7 +26,7 @@ GHL_LOCATION_ID = os.getenv("GHL_LOCATION_ID")
 
 anthropic_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 cartesia_client = Cartesia(api_key=CARTESIA_API_KEY)
-deepgram_client = AsyncDeepgramClient(DEEPGRAM_API_KEY)
+deepgram_client = DeepgramClient(DEEPGRAM_API_KEY)
 
 SYSTEM_PROMPT = """
 You are "Gemma", a warm, concise AI front-desk receptionist for "Precision Auto Repair".
