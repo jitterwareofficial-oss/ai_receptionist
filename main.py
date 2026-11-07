@@ -1,16 +1,15 @@
 import os
 import json
-import asyncio
 import base64
 import httpx
-from fastapi import FastAPI, WebSocket, Response
+from fastapi import FastAPI, Request, Response
 from anthropic import AsyncAnthropic
 from cartesia import Cartesia
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI(title="Gemma AI Receptionist - Cartesia Unified Stream")
+app = FastAPI(title="Gemma AI Receptionist - Twilio Voice Engine")
 
 # Credentials loaded directly from Render
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
@@ -27,7 +26,6 @@ Your main goal is to collect the caller's First Name, Last Name, Phone Number, a
 CRITICAL VOICE RULES:
 1. Keep every response under 20 words.
 2. Never use markdown, asterisks, bold text, or lists.
-3. Once you have successfully gathered all 4 fields, tell the user you are logging it.
 """
 
 # GoHighLevel V2 API Call
@@ -43,7 +41,8 @@ async def execute_ghl_contact_creation(first_name: str, last_name: str, phone: s
         "firstName": first_name,
         "lastName": last_name,
         "phone": phone,
-        "tags": ["AI Voice Lead"]
+        "tags": ["AI Voice Lead"],
+        "customFields": [{"id": "vehicle_issue", "value": issue}]
     }
     async with httpx.AsyncClient() as client:
         try:
@@ -54,111 +53,59 @@ async def execute_ghl_contact_creation(first_name: str, last_name: str, phone: s
             print(f"[GHL CRM Fail] Error: {e}")
             return False
 
+# 1. Twilio calls this endpoint first when someone dials your number
 @app.post("/twilio/voice")
 async def handle_inbound_call():
-    host_url = os.getenv("DEPLOYMENT_HOST", "://onrender.com")
-    protocol = "wss" if "localhost" not in host_url else "ws"
+    initial_greeting = "Hello! Welcome to Precision Auto Repair. How can I help you today?"
     
-    return Response(
-        content=f'<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="{protocol}://{host_url}/media-stream" /></Connect></Response>',
-        media_type="application/xml"
+    # Generate an instantaneous high-quality audio URL from Cartesia's REST endpoint
+    audio_url = f"https://cartesia.ai{httpx.URL(initial_greeting)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+    
+    # Twilio plays the greeting, transcribes the user speech, and forwards it to /twilio/respond
+    twiml_instruction = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+        <Play>{audio_url}</Play>
+        <Gather input="speech" action="/twilio/respond" speechTimeout="auto" />
+    </Response>
+    """
+    return Response(content=twiml_instruction, media_type="application/xml")
+
+# 2. Twilio automatically captures the user speech and posts the text transcript here
+@app.post("/twilio/respond")
+async def handle_user_response(request: Request):
+    form_data = await request.form()
+    user_speech = form_data.get("SpeechResult", "")
+    
+    print(f"[Twilio Transcribed] User Said: '{user_speech}'")
+    
+    if not user_speech.strip():
+        # Fallback if the user stayed silent
+        silent_audio = "https://cartesia.aiI%20didn't%20catch%20that.%20Could%20you%20repeat%20it?&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+        return Response(content=f"<Response><Play>{silent_audio}</Play><Gather input='speech' action='/twilio/respond'/></Response>", media_type="application/xml")
+
+    # Trigger GoHighLevel update conditionally if keywords match
+    if "windshield" in user_speech.lower() or "fix" in user_speech.lower():
+        import asyncio
+        asyncio.create_task(execute_ghl_contact_creation("Voice", "Lead", "8194141677", user_speech))
+
+    # Send the clean text right to Claude 5.5
+    response = await anthropic_client.messages.create(
+        model="claude-haiku-5-5",
+        max_tokens=256,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_speech}]
     )
-
-@app.websocket("/media-stream")
-async def handle_voice_gateway(twilio_ws: WebSocket):
-    await twilio_ws.accept()
-    print("[Pipeline Init] Connected to Twilio. Opening Cartesia Loops.")
-
-    session = {"stream_sid": None, "history": []}
     
-    # Open both text-to-speech and speech-to-text contexts via Cartesia's official SDK
-    tts_ctx = cartesia_client.tts.websocket()
+    ai_text = response.content.text
+    print(f"[Claude 5.5] Response: '{ai_text}'")
     
-    try:
-        # Open Cartesia Transcription Context using their standard web socket client interface
-        async with cartesia_client.stt.websocket() as stt_ws:
-            
-            # Configure transcription parameters
-            await stt_ws.send(json.dumps({
-                "setup": {
-                    "model_id": "ink-2",
-                    "language": "en",
-                    "audio": {
-                        "encoding": "mulaw",
-                        "sample_rate": 8000
-                    }
-                }
-            }))
-
-            async def listen_to_transcripts():
-                async for message in stt_ws:
-                    resp = json.loads(message)
-                    if resp.get("type") == "transcript" and resp.get("final"):
-                        user_text = resp["transcript"]["text"]
-                        if user_text.strip():
-                            print(f"[Cartesia STT] User said: '{user_text}'")
-                            
-                            # Simple extraction trigger for GoHighLevel integration testing
-                            if "windshield" in user_text.lower() or "fix" in user_text.lower():
-                                asyncio.create_task(execute_ghl_contact_creation("Voice", "Lead", "8194141677", user_text))
-                            
-                            asyncio.create_task(run_cognitive_response(user_text, twilio_ws, session, tts_ctx))
-
-            asyncio.create_task(listen_to_transcripts())
-
-            while True:
-                raw_frame = await twilio_ws.receive_text()
-                packet = json.loads(raw_frame)
-
-                if packet.get("event") == "start":
-                    session["stream_sid"] = packet["start"]["streamSid"]
-                    print(f"[Telephony] Live Stream ID: {session['stream_sid']}")
-                    asyncio.create_task(run_cognitive_response("Hello", twilio_ws, session, tts_ctx))
-
-                elif packet.get("event") == "media":
-                    payload_b64 = packet["media"]["payload"]
-                    # Stream raw telephone audio chunks directly up to Cartesia transcription
-                    await stt_ws.send(json.dumps({"audio": payload_b64}))
-
-                elif packet.get("event") == "stop":
-                    break
-
-    except Exception as e:
-        print(f"[Pipeline Exception] Loop Error: {e}")
-    finally:
-        await twilio_ws.close()
-
-async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session: dict, tts_ctx):
-    session["history"].append({"role": "user", "content": user_input})
-
-    try:
-        response = await anthropic_client.messages.create(
-            model="claude-haiku-5-5",
-            max_tokens=256,
-            system=SYSTEM_PROMPT,
-            messages=session["history"]
-        )
-        
-        ai_text = response.content[0].text
-        print(f"[Claude 5.5] Response: '{ai_text}'")
-        session["history"].append({"role": "assistant", "content": ai_text})
-
-        output_format = {"container": "raw", "encoding": "pcm_mulaw", "sample_rate": 8000}
-        response_stream = tts_ctx.send(
-            model_id="sonic-latest",
-            transcript=ai_text,
-            voice_id="79a125e8-cd45-4c13-8a67-ac375d374e5d",
-            output_format=output_format,
-            stream=True
-        )
-
-        for chunk in response_stream:
-            b64_audio = base64.b64encode(chunk["audio"]).decode("utf-8")
-            await twilio_ws.send_text(json.dumps({
-                "event": "media",
-                "streamSid": session["stream_sid"],
-                "media": {"payload": b64_audio}
-            }))
-                    
-    except Exception as exc:
-        print(f"[Cognitive Error] Processing Failure: {exc}")
+    # Generate the reply voice URL
+    reply_audio_url = f"https://cartesia.ai{httpx.URL(ai_text)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+    
+    twiml_instruction = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+        <Play>{reply_audio_url}</Play>
+        <Gather input="speech" action="/twilio/respond" speechTimeout="auto" />
+    </Response>
+    """
+    return Response(content=twiml_instruction, media_type="application/xml")
