@@ -6,7 +6,8 @@ import httpx
 from fastapi import FastAPI, WebSocket, Response
 from anthropic import AsyncAnthropic
 from cartesia import Cartesia
-from deepgram import AsyncDeepgramClient, LiveOptions, LiveEvents
+from deepgram import AsyncDeepgramClient
+from deepgram.models import LiveOptions, LiveEvents
 from dotenv import load_dotenv
 
 load_dotenv()
