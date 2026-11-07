@@ -45,8 +45,12 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
     # Target the production Cartesia STT and TTS endpoint loops
     cartesia_stt_url = "wss://api.cartesia.ai/stt/turns/websocket"
     cartesia_tts_url = "wss://api.cartesia.ai/tts/websocket?v=2024-06-10"
-    # Create an explicit authorization header dict for the websocket connection
-    cartesia_headers = {"X-API-Key": CARTESIA_API_KEY}
+
+    # ADD THE CARTESIA-VERSION HEADER HERE
+    cartesia_headers = {
+        "X-API-Key": CARTESIA_API_KEY,
+        "Cartesia-Version": "2026-08-14"
+    }
 
     session = {"stream_sid": None, "history": []}
 
