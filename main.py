@@ -100,7 +100,7 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
         response_stream = tts_ctx.send(
             model_id="sonic-english",
             transcript=ai_text,
-            voice_id="e0b49cb3-cb9c-411a-9694-ca28389656fb",
+            voice_id="a0e99861-435c-4da7-8bce-d368e1e21dec", # "Doctor" - Clear, professional voice
             output_format=output_format,
             stream=True
         )
