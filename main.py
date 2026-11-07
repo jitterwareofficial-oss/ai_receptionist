@@ -1,3 +1,4 @@
+import base64
 import os
 import json
 import asyncio
@@ -5,6 +6,7 @@ from fastapi import FastAPI, WebSocket, Response
 from anthropic import AsyncAnthropic
 from cartesia import Cartesia
 from dotenv import load_dotenv
+
 
 load_dotenv()
 
@@ -106,11 +108,15 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
         )
 
         for chunk in response_stream:
-            # Package the audio bytes immediately back into Twilio's specific payload envelope
+            # Convert raw audio bytes into a base64 text string for Twilio
+            audio_bytes = chunk["audio"]
+            b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+
+            # Package the string safely into Twilio's JSON envelope
             await twilio_ws.send_text(json.dumps({
                 "event": "media",
                 "streamSid": session["stream_sid"],
-                "media": {"payload": chunk["audio"]}
+                "media": {"payload": b64_audio}
             }))
                     
     except Exception as exc:
