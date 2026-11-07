@@ -19,7 +19,7 @@ anthropic_client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 cartesia_client = Cartesia(api_key=CARTESIA_API_KEY)
 
 SYSTEM_PROMPT = """
-You are "Sam", a warm, concise AI front-desk receptionist for "Precision Auto Repair".
+You are "Gemma", a warm, concise AI front-desk receptionist for "Precision Auto Repair".
 CRITICAL: Keep every response under 20 words. Never use markdown, asterisks, or bold text.
 """
 
@@ -45,6 +45,8 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
     # Target the production Cartesia STT and TTS endpoint loops
     cartesia_stt_url = "wss://api.cartesia.ai/stt/turns/websocket"
     cartesia_tts_url = "wss://api.cartesia.ai/tts/websocket?v=2024-06-10"
+    # Create an explicit authorization header dict for the websocket connection
+    cartesia_headers = {"X-API-Key": CARTESIA_API_KEY}
 
     session = {"stream_sid": None, "history": []}
 
@@ -53,8 +55,10 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
 
     try:
         # Open persistent connections directly to Cartesia's STT (Ink-2) server
-        async with ws_connect(f"{cartesia_stt_url}?api_key={CARTESIA_API_KEY}") as stt_ws:
-            
+        #async with ws_connect(f"{cartesia_stt_url}?api_key={CARTESIA_API_KEY}") as stt_ws:
+        # Open the connection passing headers explicitly     
+        async with ws_connect(cartesia_stt_url, extra_headers=cartesia_headers) as stt_ws:
+        
             # Configure Cartesia Ink-2 for Twilio's standard raw telephony format
             stt_setup = {
                 "model": "ink-2",
