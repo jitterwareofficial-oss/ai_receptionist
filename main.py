@@ -98,7 +98,7 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
         
         # Streams bytes down directly using Cartesia's official socket handler
         response_stream = tts_ctx.send(
-            model_id="sonic-english",
+            model_id="sonic-latest",
             transcript=ai_text,
             voice_id="62ae83ad-4f6a-430b-af41-a9bede9286ca", # "Doctor" - Clear, professional voice
             output_format=output_format,
