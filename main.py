@@ -92,7 +92,7 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
         # 2. Use Cartesia official SDK context to request raw mu-law streaming chunks safely
         output_format = {
             "container": "raw",
-            "encoding": "mulaw",
+            "encoding": "pcm_mulaw",
             "sample_rate": 8000
         }
         
