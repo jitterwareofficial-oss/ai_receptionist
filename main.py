@@ -6,8 +6,10 @@ import httpx
 from fastapi import FastAPI, WebSocket, Response
 from anthropic import AsyncAnthropic
 from cartesia import Cartesia
-from deepgram import AsyncDeepgramClient
-from deepgram import DeepgramClient, LiveOptions, LiveEvents
+# CORRECT IMPORT LAYOUT FOR DEEPGRAM SDK V7+:
+from deepgram import DeepgramClient
+from deepgram.clients.live.v1.options import LiveOptions
+from deepgram.clients.live.v1.client import LiveEvents
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -106,10 +108,18 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
     try:
         async with deepgram_client.listen.v1.connect(dg_options) as dg_ws:
             
+            # UPDATE THIS ENTIRE MESSAGE HANDLER TO MATCH DEEPGRAM V7:
             async def on_message(self, result, **kwargs):
-                sentence = result.channel.alternatives[0].transcript
-                if result.is_final and sentence.strip():
+                # Deepgram v7 delivers responses directly as a clean dictionary or text object
+                if hasattr(result, "channel") and result.channel.alternatives:
+                    sentence = result.channel.alternatives[0].transcript
+                else:
+                    # Fallback check for raw dictionary strings
+                    sentence = getattr(result, "transcript", "")
+
+                if sentence and sentence.strip():
                     print(f"[Deepgram STT] User said: '{sentence}'")
+                    # Send the clean text to Claude 5.5
                     asyncio.create_task(run_cognitive_response(sentence, twilio_ws, session, tts_ctx))
 
             dg_ws.on(LiveEvents.Transcript, on_message)
