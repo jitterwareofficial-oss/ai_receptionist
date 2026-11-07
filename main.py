@@ -63,8 +63,7 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
         
             # Configure Cartesia Ink-2 for Twilio's standard raw telephony format
             stt_setup = {
-                #"model": "ink-2",
-                "model": "sonic-2",
+                "model_id": "ink-2",
                 "language": "en",
                 "sample_rate": 8000,
                 "encoding": "mulaw"
@@ -123,8 +122,7 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
     try:
         # Query Claude Haiku 5.5
         response = await anthropic_client.messages.create(
-            #model="claude-haiku-5.5",
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-5-5",
             max_tokens=256,
             system=SYSTEM_PROMPT,
             messages=session["history"]
