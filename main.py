@@ -63,7 +63,7 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
         
             # Configure Cartesia Ink-2 for Twilio's standard raw telephony format
             stt_setup = {
-                "model_id": "sonic-2",  # Changed to the official Sonic-2 tier ID
+                "model_id": "ink-2",  # Keeps the correct SDK property while naming the STT model
                 "language": "en",
                 "audio": {
                     "encoding": "mulaw",
