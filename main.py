@@ -58,8 +58,8 @@ async def execute_ghl_contact_creation(first_name: str, last_name: str, phone: s
 async def handle_inbound_call():
     initial_greeting = "Hello! Welcome to Precision Auto Repair. How can I help you today?"
     
-    # Generate an instantaneous high-quality audio URL from Cartesia's REST endpoint
-    audio_url = f"https://cartesia.ai{httpx.URL(initial_greeting)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+    # FIX: Correct production endpoint URL structure for Cartesia TTS
+    audio_url = f"https://cartesia.ai{httpx.URL(initial_greeting)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d&output_format=wav"
     
     # Twilio plays the greeting, transcribes the user speech, and forwards it to /twilio/respond
     twiml_instruction = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -80,7 +80,7 @@ async def handle_user_response(request: Request):
     
     if not user_speech.strip():
         # Fallback if the user stayed silent
-        silent_audio = "https://cartesia.aiI%20didn't%20catch%20that.%20Could%20you%20repeat%20it?&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+        silent_audio = "https://cartesia.aiI%20didn't%20catch%20that.%20Could%20you%20repeat%20it?&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d&output_format=wav"
         return Response(content=f"<Response><Play>{silent_audio}</Play><Gather input='speech' action='/twilio/respond'/></Response>", media_type="application/xml")
 
     # Trigger GoHighLevel update conditionally if keywords match
@@ -96,11 +96,11 @@ async def handle_user_response(request: Request):
         messages=[{"role": "user", "content": user_speech}]
     )
     
-    ai_text = response.content.text
+    ai_text = response.content[0].text
     print(f"[Claude 5.5] Response: '{ai_text}'")
     
-    # Generate the reply voice URL
-    reply_audio_url = f"https://cartesia.ai{httpx.URL(ai_text)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d"
+    # FIX: Correct production endpoint URL structure for Cartesia TTS
+    reply_audio_url = f"https://cartesia.ai{httpx.URL(ai_text)}&voice_id=79a125e8-cd45-4c13-8a67-ac375d374e5d&output_format=wav"
     
     twiml_instruction = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
