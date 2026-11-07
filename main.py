@@ -63,10 +63,12 @@ async def handle_voice_gateway(twilio_ws: WebSocket):
         
             # Configure Cartesia Ink-2 for Twilio's standard raw telephony format
             stt_setup = {
-                "model_id": "ink-2",
+                "model_id": "sonic-2",  # Changed to the official Sonic-2 tier ID
                 "language": "en",
-                "sample_rate": 8000,
-                "encoding": "mulaw"
+                "audio": {
+                    "encoding": "mulaw",
+                    "sample_rate": 8000
+                }
             }
             await stt_ws.send(json.dumps({"setup": stt_setup}))
 
@@ -132,8 +134,14 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
         print(f"[Claude 5.5] Generated Response: '{ai_text}'")
         session["history"].append({"role": "assistant", "content": ai_text})
 
-        # Connect directly to Cartesia Sonic (TTS) to generate playback bytes
-        async with ws_connect(f"{tts_url}&api_key={CARTESIA_API_KEY}") as tts_ws:
+        # Define headers locally if they aren't global yet
+        cartesia_headers = {
+            "X-API-Key": CARTESIA_API_KEY,
+            "Cartesia-Version": "2026-08-14"
+        }
+
+        # FIX: Pass the cartesia_headers explicitly here to stop the HTTP 400
+        async with ws_connect("wss://api.cartesia.ai/tts/websocket?v=2024-06-10", extra_headers=cartesia_headers) as tts_ws:
             tts_setup = {
                 "context_id": session["stream_sid"],
                 "model_id": "sonic-english",
@@ -154,3 +162,4 @@ async def run_cognitive_response(user_input: str, twilio_ws: WebSocket, session:
                     
     except Exception as exc:
         print(f"[Cognitive Fail] Generation tracking encountered an exception: {exc}")
+
